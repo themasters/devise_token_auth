@@ -4,6 +4,11 @@ module DeviseTokenAuth
   class ApplicationController < DeviseController
     include DeviseTokenAuth::Concerns::SetUserByToken
 
+    rescue_from StandardError do |e|
+      render_server_error(e)
+    end
+
+
     def resource_data(opts = {})
       response_data = opts[:resource_json] || @resource.as_json
       response_data['type'] = @resource.class.name.parameterize if json_api?
@@ -74,6 +79,22 @@ module DeviseTokenAuth
       }
       response = response.merge(data) if data
       render json: response, status: status
+    end
+
+    def render_server_error(e)
+      if request.original_fullpath =~ /^\/api/
+        error_info = {
+            status: 'server-error',
+            messages: [
+                "#{e.class.name} : #{e.message}"
+            ]
+        }
+        error_info[:trace] = e.backtrace[0,15] if Rails.env.development?
+        render json: error_info.to_json, status: 500
+      else
+        render text: "500 Internal Server Error", status: 500
+        raise e
+      end
     end
   end
 end
